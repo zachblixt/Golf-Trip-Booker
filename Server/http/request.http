@@ -1,0 +1,168 @@
+# VS Code REST Client. Run request 1 first -- every request below reads its token.
+# REST Client only resolves {{name.response...}} within one file, which is why the
+# login lives here rather than in auth.http.
+
+@host = http://localhost:8080/api
+
+### 1. Log in as a client
+# @name clientLogin
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "zach",
+  "password": "1234"
+}
+
+### Destinations, for the picker on the New Request screen
+GET {{host}}/destination
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+### My Trips. Scoped to the token -- there is no user id to swap.
+GET {{host}}/request
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+### Trip detail. Carries the booking once a host has made one.
+GET {{host}}/request/1
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+### SECURITY: someone else's request. 403 -- request 4 belongs to dana.
+GET {{host}}/request/4
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+### A request that does not exist. 404, not 403.
+GET {{host}}/request/999
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+### SECURITY: a client reaching for a host route. 403 before it touches a controller.
+GET {{host}}/host/request
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+### SECURITY: registering while asking to be a HOST. Comes back CLIENT.
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "sneaky@example.com",
+  "username": "sneaky",
+  "password": "1234",
+  "role": "HOST"
+}
+
+### New request. 201.
+POST {{host}}/request
+Content-Type: application/json
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+{
+  "destinationId": 3,
+  "budgetPerPlayer": 1500.00,
+  "playerCount": 4,
+  "roundsRequested": 2,
+  "nights": 3,
+  "earliestStart": "2026-11-06",
+  "latestStart": "2026-11-20",
+  "notes": "Prefer a Thursday start"
+}
+
+### Invalid: no rounds, no players, budget of zero. 400, one message per problem.
+POST {{host}}/request
+Content-Type: application/json
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+{
+  "destinationId": 3,
+  "budgetPerPlayer": 0,
+  "playerCount": 0,
+  "roundsRequested": 0,
+  "nights": 0
+}
+
+### A destination that does not exist. 400, not a foreign key crash.
+POST {{host}}/request
+Content-Type: application/json
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+{
+  "destinationId": 999,
+  "budgetPerPlayer": 1000.00,
+  "playerCount": 2,
+  "roundsRequested": 2,
+  "nights": 2
+}
+
+### Invalid: half a window. 400 -- both ends or neither.
+POST {{host}}/request
+Content-Type: application/json
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+{
+  "destinationId": 3,
+  "budgetPerPlayer": 1500.00,
+  "playerCount": 4,
+  "roundsRequested": 2,
+  "nights": 3,
+  "earliestStart": "2026-11-06"
+}
+
+### Edit a request that is still pending (post-MVP). 204.
+PUT {{host}}/request/2
+Content-Type: application/json
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+{
+  "destinationId": 2,
+  "budgetPerPlayer": 2200.00,
+  "playerCount": 2,
+  "roundsRequested": 3,
+  "nights": 3,
+  "earliestStart": "2026-09-03",
+  "latestStart": "2026-09-17",
+  "notes": "Bumped the budget"
+}
+
+### Cancel a pending request. 204. The row survives as CANCELLED.
+DELETE {{host}}/request/2
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+### Cancelling a booked trip. 400 -- too late.
+DELETE {{host}}/request/1
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+### Accept the proposal. 204. It becomes the booking -- the only route to BOOKED there is.
+POST {{host}}/request/51/accept
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+### Turn the proposal down. 204. Back to PENDING, NOT declined -- the host can try again.
+### Reason and note are both required; the note has a 10-character floor, because a
+### refusal that says nothing sends the host back to the queue no better informed.
+POST {{host}}/request/51/counter
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "reason": "DATES",
+  "note": "That weekend is my nephew's wedding. Anything the week after works."
+}
+
+### The note floor. 400, with the message the counter sheet also shows while you type.
+POST {{host}}/request/51/counter
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "reason": "PRICE",
+  "note": "too much"
+}
+
+### SECURITY: accepting somebody else's proposal. 403 -- request 51 is not dana's.
+POST {{host}}/request/4/accept
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+### Explore: booked trips, anonymised (post-MVP)
+GET {{host}}/explore
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+### Explore, filtered by cost per player and destination
+GET {{host}}/explore?maxCostPerPlayer=1200&destinationId=1
+Authorization: Bearer {{clientLogin.response.body.$.token}}

@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Build output
+Server/target/
+Client/node_modules/
+
+# Local archives and scratch
+*.tar.gz
+*.zip
+_to_delete/

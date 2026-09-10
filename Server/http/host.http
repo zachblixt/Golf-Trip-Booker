@@ -1,0 +1,150 @@
+# VS Code REST Client. Run request 1 first -- every request below reads its token.
+
+@host = http://localhost:8080/api
+
+### 1. Log in as the host
+# @name hostLogin
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "tourpro",
+  "password": "1234"
+}
+
+### The queue, oldest first, each card showing who asked
+GET {{host}}/host/request
+Authorization: Bearer {{hostLogin.response.body.$.token}}
+
+### One request, with the budget ceiling the booking form displays
+GET {{host}}/host/request/2
+Authorization: Bearer {{hostLogin.response.body.$.token}}
+
+### Book it. 2 players at $2,000 is a $4,000 ceiling, and 3 rounds means 3 courses at most.
+POST {{host}}/host/request/2/proposal
+Content-Type: application/json
+Authorization: Bearer {{hostLogin.response.body.$.token}}
+
+{
+  "courses": "Bandon Trails\nPacific Dunes\nOld Macdonald",
+  "lodging": "Lily Pond",
+  "startDate": "2026-09-03",
+  "endDate": "2026-09-06",
+  "totalCost": 3880.00,
+  "itinerary": "One round a day, walking."
+}
+
+### Booking the same request twice. 400 -- it is no longer pending.
+POST {{host}}/host/request/2/proposal
+Content-Type: application/json
+Authorization: Bearer {{hostLogin.response.body.$.token}}
+
+{
+  "courses": "Bandon Dunes",
+  "startDate": "2026-09-03",
+  "endDate": "2026-09-06",
+  "totalCost": 1000.00
+}
+
+### Over the ceiling. 400 -- decline instead of overspending someone else's money.
+POST {{host}}/host/request/4/proposal
+Content-Type: application/json
+Authorization: Bearer {{hostLogin.response.body.$.token}}
+
+{
+  "courses": "The Ocean Course\nTurtle Point",
+  "lodging": "The Sanctuary",
+  "startDate": "2026-09-28",
+  "endDate": "2026-10-01",
+  "totalCost": 99000.00
+}
+
+### More courses than rounds asked for. 400. Request 5 asked for 2 rounds.
+POST {{host}}/host/request/5/proposal
+Content-Type: application/json
+Authorization: Bearer {{hostLogin.response.body.$.token}}
+
+{
+  "courses": "Red\nBlue\nBlack",
+  "startDate": "2026-10-02",
+  "endDate": "2026-10-04",
+  "totalCost": 6000.00
+}
+
+### Decline with a reason. 204.
+POST {{host}}/host/request/5/decline
+Content-Type: application/json
+Authorization: Bearer {{hostLogin.response.body.$.token}}
+
+{
+  "reason": "Streamsong has no eight-player tee windows that week."
+}
+
+### Decline without a reason. 400.
+POST {{host}}/host/request/4/decline
+Content-Type: application/json
+Authorization: Bearer {{hostLogin.response.body.$.token}}
+
+{
+  "reason": ""
+}
+
+### Correct a booking after the fact (post-MVP). 204. Stays on its own request.
+PUT {{host}}/host/booking/1
+Content-Type: application/json
+Authorization: Bearer {{hostLogin.response.body.$.token}}
+
+{
+  "courses": "Pinehurst No. 2\nPinehurst No. 4\nPine Needles",
+  "lodging": "The Holly Inn",
+  "startDate": "2026-10-12",
+  "endDate": "2026-10-16",
+  "totalCost": 4700.00,
+  "itinerary": "Swapped Mid Pines for Pine Needles."
+}
+
+### Over the ceiling. Same endpoint as any other proposal -- the client judges the price.
+POST {{host}}/host/request/52/proposal
+Content-Type: application/json
+Authorization: Bearer {{hostLogin.response.body.$.token}}
+
+{
+  "courses": "Payne's Valley\nBuffalo Ridge\nOzarks National",
+  "lodging": "Big Cedar Lodge",
+  "startDate": "2026-09-18",
+  "endDate": "2026-09-20",
+  "totalCost": 3600.00,
+  "itinerary": "3 rounds over 3 days. Ozarks National last."
+}
+
+### Pull that proposal back. 204, request returns to the queue, the row is stamped withdrawn.
+### A POST, not a DELETE -- nothing is deleted, and the note has to travel in a body.
+### The note is required with the same 10-character floor a client's counter carries:
+### whoever ends a proposal owes the other side a sentence about it.
+POST {{host}}/host/request/52/withdrawal
+Content-Type: application/json
+Authorization: Bearer {{hostLogin.response.body.$.token}}
+
+{
+  "note": "The lodge released our block for that week."
+}
+
+### The note floor, same message the Sent tab shows while you type. 400.
+POST {{host}}/host/request/52/withdrawal
+Content-Type: application/json
+Authorization: Bearer {{hostLogin.response.body.$.token}}
+
+{
+  "note": "sorry"
+}
+
+### The host's own view of what is out for review.
+GET {{host}}/host/request?status=PROPOSED
+Authorization: Bearer {{hostLogin.response.body.$.token}}
+
+### Every proposal ever made on request 51, newest first, each carrying how it ended.
+### The seeded one was turned down over the courses, inside budget -- which is the case
+### the old book/offer split could not represent at all.
+GET {{host}}/host/request/51/proposals
+Authorization: Bearer {{hostLogin.response.body.$.token}}
+

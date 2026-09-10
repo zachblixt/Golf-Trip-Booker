@@ -1,0 +1,68 @@
+# Written for the VS Code REST Client extension (humao.rest-client).
+#
+# Tokens are pulled straight out of the login responses with
+# {{requestName.response.body.$.token}} -- nothing to copy or paste. Run request 2
+# and 3 once, then everything below resolves.
+#
+# NOTE: in IntelliJ's HTTP Client this syntax does not work. There you would capture
+# the token in a `> {% client.global.set(...) %}` response handler instead.
+
+@host = http://localhost:8080/api
+
+### 1. Register. Always creates a CLIENT -- no field here could ask for HOST.
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "newgolfer@example.com",
+  "username": "newgolfer",
+  "password": "1234"
+}
+
+### 2. Log in as a client. Requests below reference this response.
+# @name clientLogin
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "zach",
+  "password": "1234"
+}
+
+### 3. Log in as the host.
+# @name hostLogin
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "tourpro",
+  "password": "1234"
+}
+
+### 4. Wrong password. 401 WITH a message -- and it never says which half was wrong.
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "zach",
+  "password": "not-it"
+}
+
+### 5. Who am I. Run request 2 first.
+GET {{host}}/auth/me
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+### 6. Trade a valid token for a fresh one. The app calls this on launch.
+GET {{host}}/auth/refresh
+Authorization: Bearer {{clientLogin.response.body.$.token}}
+
+### 7. No token at all. 401 with an EMPTY body -- this one is supposed to fail.
+GET {{host}}/auth/me
+
+### 8. A token that is not a token. Also 401, empty, no stack trace.
+GET {{host}}/auth/me
+Authorization: Bearer not-a-real-token
+
+### 9. The host's identity, confirming the role claim rides along.
+GET {{host}}/auth/me
+Authorization: Bearer {{hostLogin.response.body.$.token}}
