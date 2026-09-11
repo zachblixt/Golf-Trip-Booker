@@ -1,0 +1,54 @@
+# The whole stack: a MySQL container and the API container, on a private
+# network. Start it with `docker compose up --build`.
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    ports:
+      # 3307 on the host, because your own MySQL already holds 3306. Point
+      # Workbench at 127.0.0.1:3307 to inspect the container's database.
+      # The api container does NOT use this mapping; it reaches MySQL on the
+      # private network at db:3306.
+      - "3307:3306"
+    volumes:
+      # Named volume, so rows survive `docker compose down`. Without it, the
+      # database lives in the container's disposable layer and every restart
+      # is a fresh install.
+      - db-data:/var/lib/mysql
+      # Scripts in this directory run ONCE, on first boot of an empty data
+      # volume, in alphabetical order. The numbers are the point: schema must
+      # exist before seed data, and the real filenames sort the wrong way.
+      - ./Server/database/production-schema.sql:/docker-entrypoint-initdb.d/01-production-schema.sql:ro
+      - ./Server/database/test-schema.sql:/docker-entrypoint-initdb.d/02-test-schema.sql:ro
+      - ./Server/database/initial-data.sql:/docker-entrypoint-initdb.d/03-initial-data.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      # Seeding 59 requests and 50 bookings takes a while on first boot, and
+      # failures during this window do not count against the retry budget.
+      start_period: 60s
+
+  api:
+    build: ./Server
+    depends_on:
+      db:
+        # Not just "started". MySQL accepts TCP connections well before it is
+        # ready to answer queries, so waiting on the healthcheck is what stops
+        # the API booting into a database that is still initialising.
+        condition: service_healthy
+    environment:
+      # "db" is the service name above. Compose gives every service a DNS
+      # entry on the private network, so this resolves without any address.
+      # localhost here would mean the api container itself.
+      DB_URL: jdbc:mysql://db:3306/golf_trip_booker
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "8080:8080"
+
+volumes:
+  db-data:

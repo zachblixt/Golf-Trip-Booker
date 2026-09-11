@@ -14,3 +14,6 @@ Client/node_modules/
 *.tar.gz
 *.zip
 _to_delete/
+
+# Local secrets
+.env
