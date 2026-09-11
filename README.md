@@ -11,7 +11,7 @@ A Spring Boot API with a React Native client, built as the capstone for the Dev1
 |---|---|
 | Server | Spring Boot 3.5.7, Java 17, MySQL 8, JdbcClient, stateless Spring Security with JWT |
 | Client | Expo SDK 54, React Native 0.81, React 19.1, Expo Router 6 |
-| Tests | 116 JUnit tests across the data and domain layers |
+| Tests | 167 JUnit tests. 104 of them run against a real MySQL |
 
 ## Running it
 

@@ -138,15 +138,16 @@ child row is the booking — so `production-schema.sql` puts the FK on
 
 ## Tests
 
-116 tests: 47 in the data layer, 69 in the domain layer.
+167 tests: 62 in the data layer, 103 in the domain layer, 2 over HTTP.
 
 Repository tests run against a real `golf_trip_booker_test` database and call
 `set_known_good_state()` before each method. `TestDataHelper` mirrors that
 procedure — change one, change the other in the same commit. Service tests mock
 the repositories with `@MockitoBean` and focus on the guards and validation.
 
-Because they need a live MySQL, they are skipped during the Docker image build and
-run in CI against a MySQL service container instead. Locally:
+104 of the 167 need a live MySQL: every data-layer test, and every domain test that
+opens a transaction. That is why they are skipped during the Docker image build, which
+has no database, and run in CI against a MySQL service container instead. Locally:
 
 ```bash
 export DB_URL=jdbc:mysql://localhost:3306/golf_trip_booker_test
@@ -155,5 +156,10 @@ export DB_PASSWORD=...
 mvn test
 ```
 
-Nothing yet covers the HTTP layer, `SecurityConfig` or `JwtConverter`.
-`spring-security-test` is already in the pom, unused.
+`AuthControllerTest` is the first test over the HTTP layer, a `@WebMvcTest` slice that
+needs no database at all. It has to `@Import(SecurityConfig.class)`: a slice does not pick
+up a plain `@Configuration`, and without it the test silently exercises Spring Boot's
+default security instead of this project's, which answers 403 to everything. Any further
+MockMvc security test needs the same import to be worth anything.
+
+`JwtConverter` and the rest of the routes are still uncovered.

@@ -11,6 +11,7 @@ import org.golftripbooker.security.JwtConverter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -59,6 +60,17 @@ public class AuthController {
         try {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(form.getUsername(), form.getPassword()));
+        } catch (InternalAuthenticationServiceException ex) {
+            /*
+             * An AuthenticationException by inheritance only. Spring Security wraps
+             * any failure inside the UserDetailsService in this one -- an unreachable
+             * database being the usual cause -- so it says nothing whatever about the
+             * caller's credentials. Catching it alongside the real ones answers "your
+             * password is wrong" to an outage, which is a lie to the user and a false
+             * trail for whoever reads the logs. It must be caught before the parent
+             * type below, or this branch is unreachable.
+             */
+            throw ex;
         } catch (AuthenticationException ex) {
             return new ResponseEntity<>(
                     List.of("Invalid username or password."), HttpStatus.UNAUTHORIZED);
