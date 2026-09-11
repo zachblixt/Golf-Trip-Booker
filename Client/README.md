@@ -55,10 +55,16 @@ app/
   index.jsx          decides where "/" means, by role
   (auth)/            login, register
   (tabs)/            new · trips · queue · booked · explore · me
-components/          Screen, Field, Button, ErrorList, Placeholder
+  trip/              request detail, and edit while pending
+  host/              request detail with booking form, and booking correction
+components/          Screen, Card, Field, Select, Button, ErrorList, EmptyState,
+                     StatusPill, DestinationPicker, DestinationMap, RequestForm,
+                     BookingForm, and friends
 contexts/            AuthContext
-services/            api, authService
+services/            api, plus one module per resource
 storage/             tokenStorage
+hooks/               useGeocode, useUserLocation
+utils/               format, geo, nav, tripTemplate
 theme.js             colours, spacing, status pill styles
 ```
 
@@ -97,22 +103,22 @@ and would still return 403 if someone typed the route by hand.
 
 ## What is built
 
-| Screen | State |
-|---|---|
-| Login (01) | Done |
-| Register | Done |
-| Me | Done — user, role, resolved API address, log out |
-| New Request (02) | Placeholder |
-| My Trips (03) + detail (04, 05) | Placeholder |
-| Explore (06) | Placeholder |
-| Host queue (07) + booking form (08) | Placeholder |
+Every screen is built. Nothing below is a placeholder.
 
-Each placeholder names the wireframe it becomes and the endpoint it will call.
+| Screen | Notes |
+|---|---|
+| Login, Register | |
+| Me | User, role, the API address the app actually resolved, log out |
+| New Request | Destination search, map, free-text places, or copy a past trip as a template |
+| My Trips, and detail | Edit or cancel while pending; review a proposal and accept or refuse it |
+| Explore | Booked trips, anonymised, filtered by budget and destination |
+| Host queue, and booking form | Book it, counter with a proposal, or decline with a reason |
+| Host correction | Correct a booking after the fact |
 
 ## Gotchas worth knowing
 
 - `npx expo install`, not `npm install`, for new packages. It resolves the version
-  matched to SDK 57 instead of the newest on npm.
+  matched to SDK 54 instead of the newest on npm.
 - Do **not** run `npm audit fix --force`. The moderate advisories are transitive dev
   tooling; the force flag will bump past your SDK's pins and break the bundle.
   `npx expo install --check` is the dependency-health command that respects them.

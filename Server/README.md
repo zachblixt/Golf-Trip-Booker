@@ -3,7 +3,7 @@
 Spring Boot 3.5.7 · Java 17 · MySQL · JdbcClient · **stateless** Spring Security with JWT.
 
 A client asks for a golf trip — a place, a budget per player, a party size, rounds,
-nights. A host either books it or declines it with a reason.
+nights. A host either books it, counters with a proposal, or declines it with a reason.
 
 ## Why JWT instead of a session cookie
 
@@ -14,81 +14,25 @@ so "I stay logged in when I reopen the app" would fail. A bearer token in
 `expo-secure-store` survives, and it also sidesteps the CORS rule that forbids a
 wildcard origin whenever `allowCredentials(true)` is set, which matters because the
 phone reaches the server at your LAN address, not `localhost`.
+## Running it
 
-## What you need installed
-
-Nothing beyond what the pre-capstone already needed:
-
-| | Check it |
-|---|---|
-| A JDK (17 or newer) | `java -version` |
-| Maven | IntelliJ bundles it. Standalone: `mvn -v` |
-| MySQL 8, running | `mysql --version` and `mysqladmin ping` |
-
-The pom adds four artifacts — `jjwt-api`, `jjwt-impl`, `jjwt-jackson` (0.12.6) and
-`spring-security-test`. Maven downloads them on the first build, so the only
-requirement is an internet connection the first time. In IntelliJ that is the
-Maven panel's **Reload All Maven Projects**; from a terminal, `mvn clean install`.
-
-## Setup
-
-### 1. Build the databases
-
-Run these in MySQL Workbench or the `mysql` CLI, in order:
-
-```
-database/production-schema.sql
-database/test-schema.sql
-database/initial-data.sql      <- seed data, production DB only
-```
-
-`test-schema.sql` uses `delimiter //` to define `set_known_good_state()`. That is a
-client command, not server SQL — Workbench and the `mysql` CLI both understand it,
-but pasting it into a tool that does not will fail on the procedure body.
-
-### 2. Environment variables
-
-Four of them. The app reads `DB_*` in `application.properties`; `JWT_SECRET` has a
-development default so the server starts without it, but set it anyway — the
-default is in version control, which is the one place a signing key must never be.
+The whole stack, API and a seeded MySQL, comes up from the repository root:
 
 ```bash
-export DB_URL=jdbc:mysql://localhost:3306/golf_trip_booker
-export DB_USERNAME=root
-export DB_PASSWORD='your-password'
-export JWT_SECRET="$(openssl rand -base64 48)"   # any 32+ bytes; openssl ships with macOS
+docker compose up --build
 ```
 
-**Tests point at a different database.** Same three `DB_*` names, one different value:
+That builds this service from `Dockerfile`, starts MySQL, and runs
+`production-schema.sql`, `test-schema.sql` and `initial-data.sql` into it on first
+boot. Nothing needs to be installed locally but Docker. See the root `README.md`
+for the details, including how to force a re-seed.
 
-```bash
-export DB_URL=jdbc:mysql://localhost:3306/golf_trip_booker_test
-```
+To run it from an IDE against your own MySQL instead, the app reads `DB_URL`,
+`DB_USERNAME`, `DB_PASSWORD` and `JWT_SECRET` from the environment. Run the three
+scripts in `database/` yourself first, in that order, and point JUnit at
+`golf_trip_booker_test` rather than `golf_trip_booker`.
 
-### 3. Setting them in IntelliJ
-
-Two run configurations, because the app and the tests need different `DB_URL`s:
-
-- **Run → Edit Configurations → `Main`** → *Environment variables* → the four above,
-  pointing at `golf_trip_booker`.
-- **Run → Edit Configurations → Edit configuration templates… → JUnit** →
-  *Environment variables* → the same three `DB_*`, pointing at
-  `golf_trip_booker_test`.
-
-Setting the JUnit **template** rather than one test class means every test you
-write from here on inherits the test database automatically. Getting this wrong is
-the classic way to have `set_known_good_state()` wipe your seed data.
-
-If a test fails with `Unknown database 'golf_trip_booker_test'` or a repository
-test suddenly finds zero rows, this is why: the run configuration is pointed at the
-wrong schema.
-
-### 4. First run
-
-`Main.java` starts on port 8080. Because `server.address=0.0.0.0` is set — so a
-phone running Expo Go can reach it — macOS will pop a firewall prompt the first
-time asking whether to allow incoming connections for Java. Allow it, or the phone
-will time out later while `localhost` keeps working and hides the problem.
+## Seed accounts
 
 All nine seed accounts use the password `1234`. It is deliberately short so signing
 in during a demo is not four seconds of thumbing a symbol on a phone keyboard. Worth
@@ -103,7 +47,7 @@ characters with a digit, a letter and a symbol. Seeded rows go in underneath tha
 | `kyle` `brett` `tyler` `jenn` `ray` | CLIENT | The rest of the seeded history that Explore reads |
 | `tourpro` | HOST | The only host. Sees the queue. |
 
-### Reaching the server from Expo Go
+## Reaching the server from Expo Go
 
 `localhost` on a phone is the phone. Find your machine's LAN address
 (`ipconfig getifaddr en0` on a Mac) and point the client at
@@ -194,12 +138,22 @@ child row is the booking — so `production-schema.sql` puts the FK on
 
 ## Tests
 
-```bash
-export DB_URL=jdbc:mysql://localhost:3306/golf_trip_booker_test
-mvn test
-```
+116 tests: 47 in the data layer, 69 in the domain layer.
 
-Repository tests run against the real test database and call
+Repository tests run against a real `golf_trip_booker_test` database and call
 `set_known_good_state()` before each method. `TestDataHelper` mirrors that
 procedure — change one, change the other in the same commit. Service tests mock
 the repositories with `@MockitoBean` and focus on the guards and validation.
+
+Because they need a live MySQL, they are skipped during the Docker image build and
+run in CI against a MySQL service container instead. Locally:
+
+```bash
+export DB_URL=jdbc:mysql://localhost:3306/golf_trip_booker_test
+export DB_USERNAME=root
+export DB_PASSWORD=...
+mvn test
+```
+
+Nothing yet covers the HTTP layer, `SecurityConfig` or `JwtConverter`.
+`spring-security-test` is already in the pom, unused.
