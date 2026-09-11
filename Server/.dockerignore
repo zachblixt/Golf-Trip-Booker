@@ -1,0 +1,11 @@
+target/
+.idea/
+.vscode/
+*.iml
+.DS_Store
+README.md
+http/
+database/
+
+# Local secrets, never in the build context
+.env
