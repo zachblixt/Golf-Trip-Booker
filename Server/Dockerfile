@@ -1,7 +1,12 @@
 # syntax=docker/dockerfile:1
 
 # ---- build stage ----
-FROM maven:3.9-eclipse-temurin-17 AS build
+# --platform=$BUILDPLATFORM pins this stage to whatever machine is doing the
+# building, never the target. A .jar is architecture independent, so there is
+# nothing to gain from compiling it twice, and compiling it under emulation for
+# a foreign architecture would be brutally slow. Only the runtime stage below
+# is built per-architecture, and all it does there is copy a file.
+FROM --platform=$BUILDPLATFORM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /app
 
 # Dependencies resolve in their own layer, so editing a .java file does not

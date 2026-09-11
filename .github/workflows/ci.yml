@@ -98,6 +98,12 @@ jobs:
         # the push fails on an invalid reference format.
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
+      # Registers emulators so the runner can produce an arm64 image. Only the
+      # runtime stage is emulated, and it does almost nothing, so the cost is
+      # seconds rather than the many minutes a full emulated Maven build costs.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
       # Required before the build step below. Without it, build-push-action
       # uses Docker's default "docker" driver, which cannot export a build
       # cache, and cache-to: type=gha fails the job outright. This swaps in the
@@ -118,6 +124,10 @@ jobs:
         with:
           context: ./Server
           push: true
+          # GitHub runners are amd64; Apple Silicon is arm64. Publishing only
+          # the runner's architecture produced an image that could not be
+          # pulled on the machine that built it.
+          platforms: linux/amd64,linux/arm64
           # Two tags on purpose. :latest is what a human types; the commit sha
           # is what makes a specific build addressable forever, which is what
           # you need the day you have to roll something back.
