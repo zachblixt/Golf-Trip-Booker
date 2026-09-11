@@ -56,7 +56,7 @@ public class UserJdbcClientRepository implements UserRepository {
     public User create(User user) throws DataAccessException {
         final String sql = """
                 insert into app_user (email, username, password, role)
-                values (:email, :username, :password, 'CLIENT');
+                values (:email, :username, :password, 'HOST');
                 """;
 
         KeyHolder keyHolder = new GeneratedKeyHolder();
