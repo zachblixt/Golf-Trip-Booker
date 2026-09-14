@@ -19,6 +19,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -51,7 +52,7 @@ public class ProposalDraftService {
                 "itinerary": { "type": "string" },
                 "rationale": { "type": "string" }
               },
-              "required": ["courses", "startDate", "endDate", "totalCost", "rationale"]
+              "required": ["courses", "lodging", "startDate", "endDate", "totalCost", "itinerary", "rationale"]
             }
             """;
 
@@ -61,17 +62,36 @@ public class ProposalDraftService {
 
             Rules:
 
-            1. Choose courses ONLY from the list of courses that appear in the past trips
-               provided. Never invent a course name. If the list is short, reuse from it.
-            2. List at least one course and no more than the number of rounds requested.
+            1. Choose courses ONLY from the courses that appear in the past trips provided.
+               Never invent a course name. Choose lodging the same way.
+            2. Offer one course per round requested. Repeating a course is allowed when the
+               choice is deliberate, and then say why in the rationale. Never offer more
+               courses than rounds.
             3. The start date must fall on or between the earliest and latest start dates
                given. The end date must be the start date plus the number of nights.
-            4. Price from the past trips, scaled to this party size, this many rounds and
-               this many nights. The client's budget is guidance, not a ceiling. If a
-               realistic trip costs more than they hoped, price it honestly and say so in
-               the rationale. Do not invent a cheaper trip to fit the number.
-            5. The rationale is written for the host, not the client. Two or three
-               sentences. Say which past trips you priced from and why these courses.
+            4. THE PRICE IS GIVEN TO YOU. A suggested total has already been calculated
+               from the past trips. Use it. Do not recalculate it, do not adjust it to fit
+               the client's budget, and do not derive a number of your own. If you have a
+               specific reason to depart from it -- premium courses, for instance -- you may,
+               but say so explicitly and stay inside the stated range.
+            5. The client's budget is context, not a target and not a ceiling. After using
+               the suggested price, compare it to their budget and state plainly whether it
+               comes in under, over, or about level. A trip that honestly costs more than
+               they hoped is useful information. A price bent to match their budget is not.
+            6. The itinerary is one or two short sentences in the same shape as the past
+               trips below, naming how many rounds over how many days and which course
+               plays last. It is written for the client.
+            7. The rationale is written for the host, not the client. Two or three
+               sentences. Name the past trip the courses came from, and say how the price
+               compares to the budget.
+
+            Two things that are easy to get wrong:
+
+            - Cost per player does NOT rise with party size. Eight players do not each pay
+              more than four players would. The suggested total already accounts for the
+              headcount.
+            - The closest comparable is the one with the same number of rounds and nights,
+              not the cheapest one and not the most recent one. It is labelled for you.
 
             You are a starting point, not an authority. Where the evidence is thin, say so.
             """;
@@ -196,6 +216,8 @@ public class ProposalDraftService {
     // ---------- prompt ----------
 
     private String buildUserPrompt(TripRequest request, List<PastTrip> comparables) {
+        PriceGuide price = PriceGuide.from(comparables, request);
+        PastTrip closest = price.closestMatch();
         StringBuilder prompt = new StringBuilder();
 
         prompt.append("THE REQUEST\n")
@@ -203,27 +225,55 @@ public class ProposalDraftService {
                 .append("Players: ").append(request.getPlayerCount()).append("\n")
                 .append("Rounds requested: ").append(request.getRoundsRequested()).append("\n")
                 .append("Nights: ").append(request.getNights()).append("\n")
-                .append("Budget per player: $").append(request.getBudgetPerPlayer()).append("\n")
                 .append("Travel window: ").append(request.getEarliestStart())
-                .append(" to ").append(request.getLatestStart()).append("\n");
+                .append(" to ").append(request.getLatestStart()).append("\n")
+                .append("Budget per player: $").append(request.getBudgetPerPlayer())
+                .append("  (context only -- see rule 5)\n");
 
         if (request.getNotes() != null && !request.getNotes().isBlank()) {
             prompt.append("Client's notes: ").append(request.getNotes()).append("\n");
         }
 
-        prompt.append("\nPAST TRIPS AT THIS DESTINATION\n")
-                .append("These are the only courses you may choose from.\n\n");
+        prompt.append("\nTHE PRICE, ALREADY CALCULATED\n")
+                .append("Use this total: $").append(price.suggestedTotal()).append("\n")
+                .append("That is $").append(price.suggestedPerPlayer()).append(" per player")
+                .append(" for ").append(request.getPlayerCount()).append(" players.\n")
+                .append("Method: the median cost per player per round across the ")
+                .append(price.sampleSize())
+                .append(" confirmed trips below, times the ")
+                .append(request.getRoundsRequested()).append(" rounds requested.\n")
+                .append("Defensible range for this many rounds: $")
+                .append(price.lowPerPlayer()).append(" to $")
+                .append(price.highPerPlayer()).append(" per player.\n");
 
-        for (PastTrip trip : comparables) {
+        prompt.append("\nPAST TRIPS AT THIS DESTINATION\n")
+                .append("These are the only courses you may choose from.\n")
+                .append("Ordered by how closely each matches this request's rounds and nights.\n\n");
+
+        /*
+         * Sorted so the best comparable is first and labelled. Left unsorted, the model
+         * picked whichever trip suited the number it had already decided on.
+         */
+        List<PastTrip> ranked = comparables.stream()
+                .sorted(Comparator.comparingInt(t -> PriceGuide.shapeDistance(t, request)))
+                .toList();
+
+        for (PastTrip trip : ranked) {
             prompt.append("- ").append(trip.startDate()).append(": ")
                     .append(trip.playerCount()).append(" players, ")
                     .append(trip.nights()).append(" nights, ")
                     .append(trip.roundsRequested()).append(" rounds. ")
                     .append("$").append(trip.totalCost())
-                    .append(" total, $").append(trip.costPerPlayer()).append(" per player.\n")
-                    .append("  Courses: ").append(trip.courses().replace("\n", ", ")).append("\n");
+                    .append(" total, $").append(trip.costPerPlayer()).append(" per player.");
+            if (trip == closest) {
+                prompt.append("   <-- CLOSEST MATCH to this request");
+            }
+            prompt.append("\n  Courses: ").append(trip.courses().replace("\n", ", ")).append("\n");
             if (trip.lodging() != null && !trip.lodging().isBlank()) {
                 prompt.append("  Lodging: ").append(trip.lodging()).append("\n");
+            }
+            if (trip.itinerary() != null && !trip.itinerary().isBlank()) {
+                prompt.append("  Itinerary: ").append(trip.itinerary()).append("\n");
             }
         }
 

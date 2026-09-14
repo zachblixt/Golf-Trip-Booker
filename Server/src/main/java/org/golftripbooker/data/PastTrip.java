@@ -18,7 +18,8 @@ public record PastTrip(String courses,
                        int nights,
                        int roundsRequested,
                        BigDecimal totalCost,
-                       LocalDate startDate) {
+                       LocalDate startDate,
+                       String itinerary) {
 
     /**
      * What one person paid. This, not the total, is the number that compares across trips

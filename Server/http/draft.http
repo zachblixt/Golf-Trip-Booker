@@ -1,25 +1,62 @@
 ### Drafting a proposal.
 ###
-### Run auth.http first and paste tourpro's token below. Requires ANTHROPIC_API_KEY
-### to be set in the server's environment; without it this returns a 400 saying so,
-### which is the correct behaviour rather than a failure.
+### Run auth.http first, log in as tourpro, and paste the token below.
+### Requires ANTHROPIC_API_KEY in the server's environment. Without it every call
+### here returns 400 "Drafting is not configured on this server.", which is the
+### designed behaviour and not a failure.
+###
+### The five PENDING requests in the seed data, with the confirmed trips behind
+### each destination. More history means more for the model to price from.
+###
+###   53  dest  7   4 past trips   8 players, 3 rounds, 2 nights, $400/player
+###   52  dest 10   2 past trips   6 players, 3 rounds, 2 nights, $550/player
+###   56  dest 14   2 past trips  12 players, 2 rounds, 2 nights, $500/player
+###   54  dest 15   1 past trip    4 players, 2 rounds, 2 nights, $425/player
+###   55  dest  5   1 past trip    4 players, 3 rounds, 1 night,  $350/player
 
 @host = http://localhost:8080
 @token = paste-tourpro-token-here
+@clientToken = paste-a-client-token-here
 
-### The queue, to pick a pending request id.
+### The queue, to confirm what is actually pending.
 GET {{host}}/api/host/request
 Authorization: Bearer {{token}}
 
-### Draft a proposal for one of them. Writes nothing.
-POST {{host}}/api/host/request/1/proposal/draft
+### Best first test: the most history to draw on.
+POST {{host}}/api/host/request/53/proposal/draft
 Authorization: Bearer {{token}}
 
-### A request at a place with no booking history: expect a 400 explaining why,
-### not an invented golf course.
-POST {{host}}/api/host/request/59/proposal/draft
+### Thinnest history. Worth comparing: one past trip is much less to price from,
+### and the rationale should be more hedged if the prompt is doing its job.
+POST {{host}}/api/host/request/55/proposal/draft
 Authorization: Bearer {{token}}
 
-### As a client rather than a host: 403 from SecurityConfig before it reaches anything.
-POST {{host}}/api/host/request/1/proposal/draft
-Authorization: Bearer paste-a-client-token-here
+### Twelve players, which no past trip at that destination matches. Tests whether
+### it scales the price or just copies a number.
+POST {{host}}/api/host/request/56/proposal/draft
+Authorization: Bearer {{token}}
+
+### A request already PROPOSED rather than PENDING: 400, no model call, no spend.
+POST {{host}}/api/host/request/51/proposal/draft
+Authorization: Bearer {{token}}
+
+### As a client: 403 from SecurityConfig, before it reaches any of this.
+POST {{host}}/api/host/request/53/proposal/draft
+Authorization: Bearer {{clientToken}}
+
+### The decline-with-no-history path is NOT reachable from seed data -- every
+### pending request has a destination with confirmed trips. To see it, create a
+### request naming a place nobody has booked, then draft against its id.
+POST {{host}}/api/request
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{
+  "requestedPlace": "Bandon Dunes",
+  "budgetPerPlayer": 900.00,
+  "playerCount": 4,
+  "roundsRequested": 2,
+  "nights": 3,
+  "earliestStart": "2027-05-03",
+  "latestStart": "2027-05-10"
+}

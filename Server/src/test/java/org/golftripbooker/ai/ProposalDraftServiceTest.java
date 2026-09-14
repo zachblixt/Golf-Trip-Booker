@@ -117,6 +117,23 @@ class ProposalDraftServiceTest {
      * answer breaks the same rule a host's own typing would. The drafter feeds the error
      * back and takes the second answer.
      */
+    /**
+     * The price reaches the model as a finished number rather than a thing to work out,
+     * and the best comparable is labelled so it does not have to pick one.
+     */
+    @Test
+    void thePromptCarriesAPriceAlreadyCalculatedAndNamesTheClosestTrip() {
+        llm.queue(GOOD_ANSWER);
+
+        service.draftFor(REQUEST_ID, host);
+
+        assertTrue(llm.lastUserPrompt.contains("THE PRICE, ALREADY CALCULATED"));
+        assertTrue(llm.lastUserPrompt.contains("Use this total: $"));
+        assertTrue(llm.lastUserPrompt.contains("CLOSEST MATCH to this request"));
+        assertTrue(llm.lastUserPrompt.contains("context only"),
+                "the budget must be framed as context, not as a target");
+    }
+
     @Test
     void retriesOnceWhenTheFirstAnswerBreaksARule() {
         llm.queue(GOOD_ANSWER.replace(
@@ -238,9 +255,11 @@ class ProposalDraftServiceTest {
     private List<PastTrip> pastTrips() {
         return List.of(
                 new PastTrip("Grayhawk\nTPC Scottsdale", "The Phoenician",
-                        4, 3, 2, new BigDecimal("3100.00"), LocalDate.of(2026, 3, 5)),
+                        4, 3, 2, new BigDecimal("3100.00"), LocalDate.of(2026, 3, 5),
+                        "2 rounds over 3 days. TPC Scottsdale last."),
                 new PastTrip("TPC Scottsdale\nWe-Ko-Pa", "Hotel Valley Ho",
-                        6, 3, 2, new BigDecimal("4800.00"), LocalDate.of(2026, 3, 18)));
+                        6, 3, 2, new BigDecimal("4800.00"), LocalDate.of(2026, 3, 18),
+                        "2 rounds over 3 days. We-Ko-Pa last."));
     }
 
     /**

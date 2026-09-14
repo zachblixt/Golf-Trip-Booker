@@ -136,6 +136,49 @@ child row is the booking — so `production-schema.sql` puts the FK on
 `booking.request_id → trip_request.request_id`, with a `unique` constraint holding
 "one booking per request".
 
+## Drafting a proposal
+
+`POST /api/host/request/{id}/proposal/draft` returns a proposal for the host to edit,
+built from the confirmed trips already taken at that destination. It writes nothing.
+
+Optional: with no `ANTHROPIC_API_KEY` the app starts normally, every screen works, and the
+endpoint declines with a plain sentence. Drafting is a convenience on top of a form a host
+can always fill in by hand, and it must never become load-bearing.
+
+**It cannot book anything**, and that is structural rather than a promise:
+`ProposalDraftService` holds no write path. What it returns goes to a screen, a host edits
+it, and what they send travels through `BookingService.propose` exactly as a hand-typed
+proposal always has. The draft is validated first by `BookingService.validateProposal`,
+which runs the same rules `propose()` does, so a suggestion the server would reject on
+submit is never shown.
+
+**No history, no draft.** The confirmed trips at a destination are the menu: the prompt
+names them as the only courses and lodging it may choose from. A request for a place nobody
+has booked, or a destination with no confirmed trips, declines rather than generating,
+because the only other source of a course name is invention.
+
+**The price is computed in Java, not asked for.** The first version let the model price the
+trip. Given request 53 (8 players, 3 rounds, 2 nights, $400 per player) it returned exactly
+$3,200 -- eight times the budget to the dollar -- cited the least similar past trip as its
+basis, and described a calculation that had not happened. That is ordinary behaviour: put a
+budget and a request for a number in the same prompt and the budget comes back.
+
+`PriceGuide` now takes the median cost per player per round across confirmed trips at that
+destination and multiplies by the rounds requested. The prompt receives a finished number
+and is told not to recalculate it; the budget is relabelled as context; comparables arrive
+sorted by shape, with the one matching rounds and nights labelled as the closest. The same
+request now prices at $2,848 from the trip it actually resembles.
+
+`PriceGuide` prices on rounds and ignores nights. With a handful of trips per destination
+there is not enough data to separate a lodging rate from a green fee, so a destination whose
+trips vary widely in nights will estimate worse.
+
+`LlmClient` is the seam: two prompts and a JSON schema in, a JSON object out, no knowledge
+of golf. `AnthropicLlmClient` is the only file that knows a vendor exists, and it uses
+Spring's `RestClient` with Jackson, so there is no new dependency. That seam is what lets
+the tests exercise the prompt, the parsing and the validation against canned answers, and
+therefore what lets CI run this feature on every push without calling a paid API.
+
 ## Tests
 
 167 tests: 62 in the data layer, 103 in the domain layer, 2 over HTTP.

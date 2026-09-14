@@ -23,7 +23,7 @@ public class PastTripJdbcClientRepository implements PastTripRepository {
          */
         final String sql = """
                 select b.courses, b.lodging, r.player_count, r.nights,
-                       r.rounds_requested, b.total_cost, b.start_date
+                       r.rounds_requested, b.total_cost, b.start_date, b.itinerary
                 from booking b
                 join trip_request r on r.request_id = b.request_id
                 where r.destination_id = ?
@@ -41,7 +41,8 @@ public class PastTripJdbcClientRepository implements PastTripRepository {
                         rs.getInt("nights"),
                         rs.getInt("rounds_requested"),
                         rs.getBigDecimal("total_cost"),
-                        rs.getDate("start_date").toLocalDate()))
+                        rs.getDate("start_date").toLocalDate(),
+                        rs.getString("itinerary")))
                 .list();
     }
 }
