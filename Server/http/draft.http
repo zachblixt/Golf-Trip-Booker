@@ -1,0 +1,25 @@
+### Drafting a proposal.
+###
+### Run auth.http first and paste tourpro's token below. Requires ANTHROPIC_API_KEY
+### to be set in the server's environment; without it this returns a 400 saying so,
+### which is the correct behaviour rather than a failure.
+
+@host = http://localhost:8080
+@token = paste-tourpro-token-here
+
+### The queue, to pick a pending request id.
+GET {{host}}/api/host/request
+Authorization: Bearer {{token}}
+
+### Draft a proposal for one of them. Writes nothing.
+POST {{host}}/api/host/request/1/proposal/draft
+Authorization: Bearer {{token}}
+
+### A request at a place with no booking history: expect a 400 explaining why,
+### not an invented golf course.
+POST {{host}}/api/host/request/59/proposal/draft
+Authorization: Bearer {{token}}
+
+### As a client rather than a host: 403 from SecurityConfig before it reaches anything.
+POST {{host}}/api/host/request/1/proposal/draft
+Authorization: Bearer paste-a-client-token-here

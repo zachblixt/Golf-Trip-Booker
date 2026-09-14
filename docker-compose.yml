@@ -47,6 +47,10 @@ services:
       DB_USERNAME: root
       DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      # Optional. Empty means the proposal-draft endpoint declines and everything
+      # else behaves exactly as before, which is the point: drafting is never
+      # load-bearing.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "8080:8080"
 

@@ -391,6 +391,21 @@ public class BookingService {
     // ---------- validation ----------
 
     /**
+     * Exactly the rules propose() applies, exposed so a drafted proposal can be checked
+     * before any host sees it. Validates and nothing else: writes no row, claims no
+     * request, touches no status.
+     *
+     * The point of sharing this rather than re-stating the rules in the drafter is that a
+     * suggestion has to clear the same bar a human's typing does. If these rules change,
+     * they change for both at once.
+     */
+    public Result<Booking> validateProposal(Booking proposal, TripRequest request) {
+        Result<Booking> result = new Result<>();
+        validate(result, proposal, request);
+        return result;
+    }
+
+    /**
      * Validated against the request, not in isolation. The interesting rules are relative:
      * you cannot list more courses than rounds asked for, and you cannot start on a date
      * outside the window the group gave.

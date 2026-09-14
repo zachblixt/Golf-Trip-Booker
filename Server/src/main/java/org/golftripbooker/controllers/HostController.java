@@ -1,5 +1,7 @@
 package org.golftripbooker.controllers;
 
+import org.golftripbooker.ai.DraftedProposal;
+import org.golftripbooker.ai.ProposalDraftService;
 import org.golftripbooker.domain.BookingService;
 import org.golftripbooker.domain.TripRequestService;
 import org.golftripbooker.domain.UserService;
@@ -7,6 +9,7 @@ import org.golftripbooker.domain.Result;
 import org.golftripbooker.dtos.BookingForm;
 import org.golftripbooker.dtos.BookingResponse;
 import org.golftripbooker.dtos.DeclineForm;
+import org.golftripbooker.dtos.ProposalDraftResponse;
 import org.golftripbooker.dtos.WithdrawForm;
 import org.golftripbooker.dtos.TripRequestResponse;
 import org.golftripbooker.models.Booking;
@@ -38,13 +41,42 @@ public class HostController {
     private final BookingService service;
     private final TripRequestService requestService;
     private final UserService userService;
+    private final ProposalDraftService draftService;
 
     public HostController(BookingService service,
                           TripRequestService requestService,
-                          UserService userService) {
+                          UserService userService,
+                          ProposalDraftService draftService) {
         this.service = service;
         this.requestService = requestService;
         this.userService = userService;
+        this.draftService = draftService;
+    }
+
+    /**
+     * A drafted proposal for the host to edit. Writes nothing, books nothing, and moves
+     * no request: the host still sends the proposal through the endpoint below, and the
+     * body they send is whatever they left in the form.
+     *
+     * POST rather than GET despite reading no state of ours. It is neither safe nor
+     * idempotent -- each call spends money at a third party and returns something
+     * different -- and a GET invites caches and retries to do both on your behalf.
+     *
+     * A failure here is a 400 carrying a plain sentence, because every one of them means
+     * the same thing to the host: no draft this time, fill the form in yourself.
+     */
+    @PostMapping("/request/{requestId}/proposal/draft")
+    public ResponseEntity<?> draftProposal(@PathVariable int requestId, Principal principal) {
+
+        Result<DraftedProposal> result =
+                draftService.draftFor(requestId, userService.currentUser(principal));
+
+        if (!result.isSuccess()) {
+            return ErrorResponse.build(result);
+        }
+
+        return new ResponseEntity<>(
+                ProposalDraftResponse.from(result.getPayload()), HttpStatus.OK);
     }
 
     /**
